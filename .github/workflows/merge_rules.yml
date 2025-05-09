@@ -25,7 +25,8 @@ jobs:
 
       - name: Define rule URLs
         run: |
-          echo "RULE_URLS=$(cat $GITHUB_WORKSPACE/your_config_file.txt | grep '^ruleset=' | awk -F',' '{print $2}' | sed 's/https*:\/\/raw.githubusercontent.com/\n&/g' | grep 'raw.githubusercontent.com')" >> $GITHUB_ENV
+          # 将 'your_config_file.txt' 替换为包含您的 ruleset 行的实际文件名
+          echo "RULE_URLS=$(cat $GITHUB_WORKSPACE/rule/Direct.txt | grep '^ruleset=' | awk -F',' '{print $2}' | sed 's/https*:\/\/raw.githubusercontent.com/\n&/g' | grep 'raw.githubusercontent.com')" >> $GITHUB_ENV
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
@@ -43,7 +44,7 @@ jobs:
           for url in "${URL_ARRAY[@]}"; do
             filename=$(basename "$url")
             echo "Downloading $url to merged_rules/$filename..."
-            if curl -sSL "$url" -o "merged_rules/$filename"; then
+            if curl -sSL --connect-timeout 10 --max-time 30 "$url" -o "merged_rules/$filename"; then
               echo "Successfully downloaded $url"
             else
               echo "Error downloading $url"
@@ -78,9 +79,9 @@ jobs:
             exit 1
           fi
 
-      - name: Generate direct rules from Direct.txt
+      - name: Generate direct rules from Direct/Direct.txt
         run: |
-          python generate_direct_rules.py Direct.txt direct_rules.yaml
+          python generate_direct_rules.py Direct/Direct.txt direct_rules.yaml
 
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
