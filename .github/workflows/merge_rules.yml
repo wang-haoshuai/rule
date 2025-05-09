@@ -29,24 +29,54 @@ jobs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
+      - name: Debug RULE_URLS
+        run: |
+          echo "Extracted Rule URLs:"
+          echo "$RULE_URLS"
+
       - name: Download and merge rules
         run: |
           mkdir -p merged_rules
           rule_urls=$(echo "$RULE_URLS" | tr '\n' ' ')
           IFS=' ' read -ra URL_ARRAY <<< "$rule_urls"
+          download_success=true
           for url in "${URL_ARRAY[@]}"; do
-            echo "Downloading $url..."
-            curl -sSL "$url" -o "merged_rules/$(basename "$url")"
+            filename=$(basename "$url")
+            echo "Downloading $url to merged_rules/$filename..."
+            if curl -sSL "$url" -o "merged_rules/$filename"; then
+              echo "Successfully downloaded $url"
+            else
+              echo "Error downloading $url"
+              download_success=false
+            fi
           done
-          cat merged_rules/* > merged_rules/merged.txt
+          if [ "$download_success" = true ]; then
+            echo "All rules downloaded successfully. Merging files..."
+            cat merged_rules/* > merged_rules/merged.txt
+          else
+            echo "Error: Not all rules were downloaded successfully. Skipping merge."
+            exit 1
+          fi
 
       - name: Deduplicate rules
         run: |
-          sort -u merged_rules/merged.txt -o merged_rules/deduplicated.txt
+          if [ -f "merged_rules/merged.txt" ]; then
+            echo "Deduplicating rules..."
+            sort -u merged_rules/merged.txt -o merged_rules/deduplicated.txt
+          else
+            echo "Error: merged_rules/merged.txt not found. Skipping deduplication."
+            exit 1
+          fi
 
       - name: Save deduplicated rules to a single file
         run: |
-          cat merged_rules/deduplicated.txt > combined_rules.list
+          if [ -f "merged_rules/deduplicated.txt" ]; then
+            echo "Saving deduplicated rules to combined_rules.list..."
+            cat merged_rules/deduplicated.txt > combined_rules.list
+          else
+            echo "Error: merged_rules/deduplicated.txt not found. Skipping save."
+            exit 1
+          fi
 
       - name: Generate direct rules from Direct.txt
         run: |
@@ -56,4 +86,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Automated rule update (merged and generated direct rules)"
-          file_pattern: combined_rules.list direct_rules.yaml # 同时提交这两个文件
+          file_pattern: combined_rules.list direct_rules.yaml
