@@ -1,0 +1,59 @@
+name: Merge and Deduplicate Rules
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  merge_rules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install required libraries
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Define rule URLs
+        run: |
+          echo "RULE_URLS=$(cat $GITHUB_WORKSPACE/your_config_file.txt | grep '^ruleset=' | awk -F',' '{print $2}' | sed 's/https*:\/\/raw.githubusercontent.com/\n&/g' | grep 'raw.githubusercontent.com')" >> $GITHUB_ENV
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Download and merge rules
+        run: |
+          mkdir -p merged_rules
+          rule_urls=$(echo "$RULE_URLS" | tr '\n' ' ')
+          IFS=' ' read -ra URL_ARRAY <<< "$rule_urls"
+          for url in "${URL_ARRAY[@]}"; do
+            echo "Downloading $url..."
+            curl -sSL "$url" -o "merged_rules/$(basename "$url")"
+          done
+          cat merged_rules/* > merged_rules/merged.txt
+
+      - name: Deduplicate rules
+        run: |
+          sort -u merged_rules/merged.txt -o merged_rules/deduplicated.txt
+
+      - name: Save deduplicated rules to a single file
+        run: |
+          cat merged_rules/deduplicated.txt > combined_rules.list
+
+      - name: Generate direct rules from Direct.txt
+        run: |
+          python generate_direct_rules.py Direct.txt direct_rules.yaml
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated rule update (merged and generated direct rules)"
+          file_pattern: combined_rules.list direct_rules.yaml # 同时提交这两个文件
