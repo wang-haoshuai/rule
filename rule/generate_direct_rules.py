@@ -34,6 +34,6 @@ def generate_direct_rules(input_file, output_file):
         print(f"输入文件 '{input_file}' 为空或不包含有效条目。")
 
 if __name__ == "__main__":
-    input_filename = "Direct.txt"  # 输入文件名，与您的 GitHub 仓库中的文件名一致
+    input_filename = "/rule/Direct.txt"  # 输入文件名，与您的 GitHub 仓库中的文件名一致
     output_filename = "direct_rules.yaml"  # 输出文件名，Clash 规则片段文件名
     generate_direct_rules(input_filename, output_filename)
