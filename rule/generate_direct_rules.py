@@ -26,7 +26,7 @@ def generate_direct_rules(input_file, output_file):
 
     if direct_rules:
         with open(output_file, 'w', encoding='utf-8') as outfile:
-            outfile.write("# Generated direct rules from {}\n".format(input_file))
+            outfile.write("# 从 {} 生成的直连规则\n".format(input_file))
             for rule in direct_rules:
                 outfile.write(rule + "\n")
         print(f"成功生成直连规则到 '{output_file}' 文件。")
@@ -34,6 +34,6 @@ def generate_direct_rules(input_file, output_file):
         print(f"输入文件 '{input_file}' 为空或不包含有效条目。")
 
 if __name__ == "__main__":
-    input_filename = "/rule/Direct.txt"  # 输入文件名，与您的 GitHub 仓库中的文件名一致
+    input_filename = "Direct/Direct.txt"  # 输入文件名，与您的 GitHub 仓库中的文件名一致
     output_filename = "direct_rules.yaml"  # 输出文件名，Clash 规则片段文件名
     generate_direct_rules(input_filename, output_filename)
