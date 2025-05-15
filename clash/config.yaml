@@ -191,7 +191,8 @@ pr: &pr {type: select, proxies: [
   '♻️ 自动选择', 
   '🌐 全部节点', 
   '直连'       
-]}
+  ]
+}
 
 # --- 策略组定义 ---
 proxy-groups:
