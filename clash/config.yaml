@@ -19,7 +19,7 @@ proxy-providers:
       enable: true
       url: https://www.gstatic.com/generate_204
       interval: 300
-    proxy: 直连 
+    proxy: 🐟 漏网之鱼 
     override:
       udp: true
 
