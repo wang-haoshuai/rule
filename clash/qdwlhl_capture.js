@@ -39,14 +39,6 @@ function safeJsonParse(str) {
     }
 }
 
-// 工具函数：格式化输出
-function formatLog(title, data) {
-    if (!config.debugMode) return;
-    console.log(`\n=== ${scriptName} - ${title} ===`);
-    console.log(data);
-    console.log("=" + "=".repeat(title.length + scriptName.length + 6));
-}
-
 // 工具函数：数据存储
 function saveToStore(key, data) {
     if (!config.saveData) return;
@@ -278,56 +270,105 @@ function handleRequest() {
     const headers = $request.headers;
     const body = $request.body;
 
-    // 检查是否为目标接口
     if (!url.includes(targetDomain) || !url.includes(targetPath)) {
         $done({});
         return;
     }
 
-    // 提取接口信息
     const apiInfo = extractApiInfo(url);
+    const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 
-    // 分析请求体
-    const contentType = headers['Content-Type'] || headers['content-type'] || '';
-    const bodyAnalysis = analyzeRequestBody(body, contentType);
+    if (config.debugMode) {
+        console.log("\n🔵 =================== QDWLHL 请求 ===================");
+        console.log(`⏰ 时间: ${timestamp}`);
+        console.log(`🌐 URL: ${url}`);
+        console.log(`📊 Method: ${method}`);
+        console.log(`📍 API路径: ${apiInfo.apiPath}`);
 
-    // 格式化输出请求信息
-    formatLog("请求解析", {
-        "时间": new Date().toLocaleString('zh-CN'),
-        "请求方法": method,
-        "完整URL": url,
-        "接口路径": apiInfo.apiPath,
-        "查询参数": apiInfo.hasParams ? apiInfo.queryParams : "无",
-        "请求头": {
-            "User-Agent": headers['User-Agent'] || headers['user-agent'] || "未知",
-            "Content-Type": contentType || "未指定",
-            "Authorization": headers['Authorization'] || headers['authorization'] || "无",
-            "Cookie": headers['Cookie'] || headers['cookie'] ? "存在" : "无",
-            "Referer": headers['Referer'] || headers['referer'] || "无"
-        },
-        "请求体类型": bodyAnalysis.type,
-        "请求体内容": bodyAnalysis.data,
-        "原始请求体": bodyAnalysis.type !== 'empty' ? bodyAnalysis.raw.substring(0, 200) + (bodyAnalysis.raw.length > 200 ? '...' : '') : "无"
-    });
-
-    // 特殊接口处理
-    if (apiInfo.apiPath.includes('login') || apiInfo.apiPath.includes('auth')) {
-        console.log(`\n🔐 检测到认证相关接口: ${apiInfo.apiPath}`);
-        if (bodyAnalysis.data) {
-            console.log("🔍 认证数据:", bodyAnalysis.data);
+        console.log("📋 请求头 (重点):");
+        const importantHeaders = ['unionId', 'openId', 'Content-Type', 'User-Agent', 'Cookie', 'Authorization'];
+        for (let key in headers) {
+            if (importantHeaders.some(h => key.toLowerCase().includes(h.toLowerCase()))) {
+                const headerValue = headers[key];
+                if (key.toLowerCase().includes('unionid') || key.toLowerCase().includes('openid') || key.toLowerCase().includes('authorization')) {
+                    const masked = headerValue.length > 10 ? headerValue.substring(0, 6) + "..." + headerValue.substring(headerValue.length - 4) : headerValue;
+                    console.log(`   🔑 ${key}: ${masked}`);
+                } else {
+                    console.log(`   📄 ${key}: ${headerValue}`);
+                }
+            }
         }
+        console.log("📋 完整请求头:");
+        for (let key in headers) {
+            console.log(`   ${key}: ${headers[key]}`);
+        }
+
+        if (body) {
+            console.log("📤 请求体:");
+            const contentType = headers['Content-Type'] || headers['content-type'] || '';
+            if (contentType.includes('application/json')) {
+                try {
+                    const jsonBody = JSON.parse(body);
+                    console.log(JSON.stringify(jsonBody, null, 2));
+                    if (jsonBody.Person) {
+                        console.log("👤 用户信息 (请求体):");
+                        console.log(`   姓名: ${jsonBody.Person.name || '未知'}`);
+                        console.log(`   工号: ${jsonBody.Person.number || '未知'}`);
+                        console.log(`   ID: ${jsonBody.Person.id || '未知'}`);
+                    }
+                    if (jsonBody.longitude && jsonBody.latitude) {
+                        console.log("📍 位置信息 (请求体):");
+                        console.log(`   地址: ${jsonBody.address || '未知'}`);
+                        console.log(`   经纬度: ${jsonBody.longitude}, ${jsonBody.latitude}`);
+                    }
+                    if (jsonBody.isPrimary !== undefined) {
+                        console.log("🔐 认证相关 (请求体):");
+                        console.log(`   isPrimary: ${jsonBody.isPrimary}`);
+                    }
+                } catch (e) {
+                    console.log(`   ${body}`);
+                    console.log("   (非JSON格式或解析错误)");
+                }
+            } else if (contentType.includes('application/x-www-form-urlencoded')) {
+                console.log(`   ${body}`);
+                console.log("   (Form Data)");
+            } else {
+                console.log(`   ${body.substring(0, 500)}${body.length > 500 ? '...' : ''}`);
+                console.log(`   (Content-Type: ${contentType})`);
+            }
+        } else {
+            console.log("📤 请求体: 无");
+        }
+        console.log("🔵 ===================================================");
     }
 
-    if (apiInfo.apiPath.includes('upload') || method === 'POST') {
-        console.log(`\n📤 检测到数据提交接口: ${apiInfo.apiPath}`);
+    saveToStore('request', { url, method, headers, body, apiInfo, timestamp });
+
+    // 更新通知逻辑
+    let apiTypeNotify = "接口操作";
+    let notificationBodyNotify = apiInfo.apiPath;
+
+    if (url.includes("getPositons")) {
+        apiTypeNotify = "🔐 用户认证";
+        notificationBodyNotify = "获取职位信息";
+    } else if (url.includes("saveData")) {
+        apiTypeNotify = "📝 日报提交";
+        notificationBodyNotify = "提交工作日报";
+    } else if (url.includes("DailyReportBill")) {
+        apiTypeNotify = "📊 日报相关";
+    } else if (url.includes("bc/")) {
+        apiTypeNotify = "🏢 基础服务";
+    } else if (url.includes("projectmanage")) {
+        apiTypeNotify = "📋 项目管理";
     }
 
-    // 发送通知
-    $notification.post(
-        "QDWLHL请求捕获",
-        `${method} ${apiInfo.apiPath}`,
-        bodyAnalysis.type !== 'empty' ? `包含${bodyAnalysis.type}数据` : "无请求体"
-    );
+    if (config.notifyAll || config.notifyPaths.some(p => apiInfo.apiPath.toLowerCase().includes(p.toLowerCase()))) {
+        $notification.post(
+            `QDWLHL请求: ${apiTypeNotify}`,
+            `${method} ${notificationBodyNotify}`,
+            `${url.substring(0, 100)}...`
+        );
+    }
 
     $done({});
 }
@@ -335,84 +376,85 @@ function handleRequest() {
 // 响应拦截和解析
 function handleResponse() {
     const url = $response.url;
+    const method = $request.method; // 获取原始请求方法
     const status = $response.status;
     const headers = $response.headers;
     const body = $response.body;
 
-    // 检查是否为目标接口
     if (!url.includes(targetDomain) || !url.includes(targetPath)) {
         $done({});
         return;
     }
 
-    // 提取接口信息
     const apiInfo = extractApiInfo(url);
-
-    // 分析响应体
-    const contentType = headers['Content-Type'] || headers['content-type'] || '';
-    const bodyAnalysis = analyzeResponseBody(body, contentType);
-
-    // 判断请求是否成功
+    const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
     const isSuccess = status >= 200 && status < 300;
     const statusIcon = isSuccess ? "✅" : "❌";
 
-    // 格式化输出响应信息
-    formatLog("响应解析", {
-        "时间": new Date().toLocaleString('zh-CN'),
-        "状态": `${statusIcon} ${status}`,
-        "接口路径": apiInfo.apiPath,
-        "响应头": {
-            "Content-Type": contentType || "未指定",
-            "Content-Length": headers['Content-Length'] || headers['content-length'] || "未知",
-            "Server": headers['Server'] || headers['server'] || "未知",
-            "Set-Cookie": headers['Set-Cookie'] || headers['set-cookie'] ? "存在" : "无"
-        },
-        "响应体类型": bodyAnalysis.type,
-        "响应体内容": bodyAnalysis.data
-    });
+    if (config.debugMode) {
+        console.log("\n🟢 =================== QDWLHL 响应 ===================");
+        console.log(`⏰ 时间: ${timestamp}`);
+        console.log(`🚦 状态: ${statusIcon} ${status}`);
+        console.log(`🌐 URL: ${url}`);
+        console.log(`📊 Method: ${method}`);
+        console.log(`📍 API路径: ${apiInfo.apiPath}`);
 
-    // 特殊响应处理
-    if (bodyAnalysis.type === 'json' && bodyAnalysis.data) {
-        const jsonData = bodyAnalysis.data;
-
-        // 检查是否包含错误信息
-        if (jsonData.error || jsonData.err || jsonData.message) {
-            console.log(`\n⚠️  检测到错误响应:`);
-            console.log("错误信息:", jsonData.error || jsonData.err || jsonData.message);
+        console.log("📋 响应头:");
+        for (let key in headers) {
+            console.log(`   ${key}: ${headers[key]}`);
         }
 
-        // 检查是否包含认证令牌
-        if (jsonData.token || jsonData.access_token || jsonData.jwt) {
-            console.log(`\n🔑 检测到认证令牌:`);
-            const token = jsonData.token || jsonData.access_token || jsonData.jwt;
-            console.log("令牌:", token.substring(0, 20) + "...");
+        if (body) {
+            console.log("📥 响应体:");
+            const contentType = headers['Content-Type'] || headers['content-type'] || '';
+            if (contentType.includes('application/json')) {
+                try {
+                    const jsonBody = JSON.parse(body);
+                    console.log(JSON.stringify(jsonBody, null, 2));
+                    // 可根据需要添加对响应体中特定字段的解析和高亮
+                    if (jsonBody.token || jsonBody.accessToken) {
+                        console.log("🔑 Token (响应体):", jsonBody.token || jsonBody.accessToken);
+                    }
+                } catch (e) {
+                    console.log(`   ${body}`);
+                    console.log("   (非JSON格式或解析错误)");
+                }
+            } else if (contentType.includes('text/html')) {
+                console.log(`   (HTML内容, 长度: ${body.length}, 部分预览)`);
+                console.log(`   ${body.substring(0, 500)}${body.length > 500 ? '...' : ''}`);
+            } else {
+                console.log(`   ${body.substring(0, 500)}${body.length > 500 ? '...' : ''}`);
+                console.log(`   (Content-Type: ${contentType})`);
+            }
+        } else {
+            console.log("📥 响应体: 无");
         }
-
-        // 检查是否包含用户信息
-        if (jsonData.user || jsonData.userInfo || jsonData.profile) {
-            console.log(`\n👤 检测到用户信息:`);
-            const userInfo = jsonData.user || jsonData.userInfo || jsonData.profile;
-            console.log("用户信息:", userInfo);
-        }
-
-        // 检查分页信息
-        if (jsonData.total || jsonData.count || jsonData.pageSize) {
-            console.log(`\n📄 检测到分页数据:`);
-            console.log("分页信息:", {
-                total: jsonData.total,
-                count: jsonData.count,
-                page: jsonData.page,
-                pageSize: jsonData.pageSize
-            });
-        }
+        console.log("🟢 ===================================================");
     }
 
-    // 发送通知
-    $notification.post(
-        "QDWLHL响应捕获",
-        `${statusIcon} ${status} ${apiInfo.apiPath}`,
-        bodyAnalysis.type !== 'empty' ? `返回${bodyAnalysis.type}数据` : "无响应体"
-    );
+    saveToStore('response', { url, status, headers, body, apiInfo, timestamp });
+
+    // 更新通知逻辑
+    let apiTypeNotify = "接口操作";
+    let notificationBodyNotify = apiInfo.apiPath;
+    // (可以沿用请求时的apiTypeNotify判断，或根据响应内容调整)
+    if (url.includes("getPositons")) {
+        apiTypeNotify = "🔐 用户认证";
+        notificationBodyNotify = "获取职位信息";
+    } else if (url.includes("saveData")) {
+        apiTypeNotify = "📝 日报提交";
+        notificationBodyNotify = "提交工作日报";
+    } else if (url.includes("DailyReportBill")) {
+        apiTypeNotify = "📊 日报相关";
+    } // ... 其他类型判断
+
+    if (config.notifyAll || config.notifyPaths.some(p => apiInfo.apiPath.toLowerCase().includes(p.toLowerCase()))) {
+        $notification.post(
+            `QDWLHL响应: ${apiTypeNotify}`,
+            `${statusIcon} ${status} ${notificationBodyNotify}`,
+            `${url.substring(0, 100)}...`
+        );
+    }
 
     $done({});
 }
