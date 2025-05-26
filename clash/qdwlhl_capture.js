@@ -12,7 +12,7 @@
  * 功能: 请求/响应解析、数据提取、模式识别、统计分析
  */
 
-const scriptName = "QDWLHL接口解析";
+const scriptName = "青岛未来互连eas接口解析";
 const targetDomain = "www.qdwlhl.com";
 const targetPath = "/wlhlwork/";
 
@@ -360,6 +360,9 @@ function handleRequest() {
         apiTypeNotify = "🏢 基础服务";
     } else if (url.includes("projectmanage")) {
         apiTypeNotify = "📋 项目管理";
+    } else if (url.includes("xj") || url.includes("vacation")) { // 新增：休假相关
+        apiTypeNotify = "🏖️ 休假相关";
+        notificationBodyNotify = "处理休假申请/查询";
     }
 
     if (config.notifyAll || config.notifyPaths.some(p => apiInfo.apiPath.toLowerCase().includes(p.toLowerCase()))) {
@@ -415,6 +418,22 @@ function handleResponse() {
                     if (jsonBody.token || jsonBody.accessToken) {
                         console.log("🔑 Token (响应体):", jsonBody.token || jsonBody.accessToken);
                     }
+                    // 新增：解析响应体中的特定业务字段
+                    if (jsonBody.Person) {
+                        console.log("👤 用户信息 (响应体):");
+                        console.log(`   姓名: ${jsonBody.Person.name || '未知'}`);
+                        console.log(`   工号: ${jsonBody.Person.number || '未知'}`);
+                        console.log(`   ID: ${jsonBody.Person.id || '未知'}`);
+                    }
+                    if (jsonBody.longitude && jsonBody.latitude) {
+                        console.log("📍 位置信息 (响应体):");
+                        console.log(`   地址: ${jsonBody.address || '未知'}`);
+                        console.log(`   经纬度: ${jsonBody.longitude}, ${jsonBody.latitude}`);
+                    }
+                    if (jsonBody.isPrimary !== undefined) {
+                        console.log("🔐 认证相关 (响应体):");
+                        console.log(`   isPrimary: ${jsonBody.isPrimary}`);
+                    }
                 } catch (e) {
                     console.log(`   ${body}`);
                     console.log("   (非JSON格式或解析错误)");
@@ -446,6 +465,9 @@ function handleResponse() {
         notificationBodyNotify = "提交工作日报";
     } else if (url.includes("DailyReportBill")) {
         apiTypeNotify = "📊 日报相关";
+    } else if (url.includes("leave") || url.includes("vacation")) { // 新增：休假相关
+        apiTypeNotify = "🏖️ 休假相关";
+        notificationBodyNotify = "处理休假申请/查询";
     } // ... 其他类型判断
 
     if (config.notifyAll || config.notifyPaths.some(p => apiInfo.apiPath.toLowerCase().includes(p.toLowerCase()))) {
