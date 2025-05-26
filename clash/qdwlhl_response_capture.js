@@ -8,7 +8,7 @@
  * 3. 启用 MITM 解密 www.qdwlhl.com
  * 4. 脚本类型选择：HTTP-RESPONSE
  *
- * 版本: 1.2.0
+ * 版本: 1.2.1
  * 更新日期: 2025-05-27
  * 功能: 响应解析、数据提取、结果分析
  */
@@ -160,13 +160,14 @@ function analyzeResponseBody(body, contentType) {
 
 // 响应拦截和解析
 function handleResponse() {
-    const url = $response.url;
-    const method = $request.method; // 获取原始请求方法
+    // 修复：使用 $request.url 而不是 $response.url
+    const url = $request.url;
+    const method = $request.method;
     const status = $response.status;
     const headers = $response.headers;
     const body = $response.body;
 
-    if (!url.includes(targetDomain) || !url.includes(targetPath)) {
+    if (!url || !url.includes(targetDomain) || !url.includes(targetPath)) {
         $done({});
         return;
     }
@@ -186,8 +187,8 @@ function handleResponse() {
         console.log(`🏷️ API类型: ${apiInfo.apiType}`);
 
         // 输出重要响应头
-        console.log("📋 响应头:");
-        const importantHeaders = ['content-type', 'set-cookie', 'server', 'date'];
+        console.log("📋 响应头 (重点):");
+        const importantHeaders = ['content-type', 'set-cookie', 'server', 'date', 'content-length'];
         for (let key in headers) {
             if (importantHeaders.some(h => key.toLowerCase().includes(h.toLowerCase()))) {
                 if (key.toLowerCase().includes('cookie')) {
@@ -238,9 +239,11 @@ function handleResponse() {
                     console.log(`💬 返回消息: ${jsonBody.message}`);
                 }
 
-                // 可根据需要添加对响应体中特定字段的解析和高亮
+                // Token 信息
                 if (jsonBody.token || jsonBody.accessToken) {
-                    console.log("🔑 Token (响应体):", jsonBody.token || jsonBody.accessToken);
+                    const token = jsonBody.token || jsonBody.accessToken;
+                    const maskedToken = token.length > 10 ? token.substring(0, 6) + "..." + token.substring(token.length - 4) : token;
+                    console.log(`🔑 Token (响应体): ${maskedToken}`);
                 }
 
                 // 解析响应体中的特定业务字段
@@ -319,7 +322,7 @@ function handleResponse() {
                         }
                         
                         // 休假详情
-                        if (apiInfo.apiType === 'vacation' && jsonBody.data) {
+                        if (apiInfo.apiType === 'xj' && jsonBody.data) {
                             const vData = jsonBody.data;
                             console.log("🏖️ 休假详情信息:");
                             
