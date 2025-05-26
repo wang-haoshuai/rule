@@ -12,7 +12,7 @@
  * 功能: 请求/响应解析、数据提取、模式识别、统计分析
  */
 
-const scriptName = "青岛未来互连eas接口解析";
+const scriptName = "QDWLHL接口解析";
 const targetDomain = "www.qdwlhl.com";
 const targetPath = "/wlhlwork/";
 
@@ -373,7 +373,7 @@ function handleRequest() {
         );
     }
 
-    $done({});
+    // 不在这里调用 $done({})，让脚本继续处理响应
 }
 
 // 响应拦截和解析
@@ -414,10 +414,26 @@ function handleResponse() {
                 try {
                     const jsonBody = JSON.parse(body);
                     console.log(JSON.stringify(jsonBody, null, 2));
+
+                    // 分析响应结果
+                    if (jsonBody.msg !== undefined) {
+                        const statusResult = jsonBody.msg === 'success' ? '✅ 成功' : '❌ 失败';
+                        console.log(`📊 请求状态: ${statusResult} (${jsonBody.msg})`);
+                    }
+
+                    if (jsonBody.code !== undefined) {
+                        console.log(`📊 状态码: ${jsonBody.code}`);
+                    }
+
+                    if (jsonBody.message) {
+                        console.log(`💬 返回消息: ${jsonBody.message}`);
+                    }
+
                     // 可根据需要添加对响应体中特定字段的解析和高亮
                     if (jsonBody.token || jsonBody.accessToken) {
                         console.log("🔑 Token (响应体):", jsonBody.token || jsonBody.accessToken);
                     }
+
                     // 新增：解析响应体中的特定业务字段
                     if (jsonBody.Person) {
                         console.log("👤 用户信息 (响应体):");
@@ -434,6 +450,87 @@ function handleResponse() {
                         console.log("🔐 认证相关 (响应体):");
                         console.log(`   isPrimary: ${jsonBody.isPrimary}`);
                     }
+
+                    // 分析数据内容
+                    if (jsonBody.data) {
+                        const dataType = Array.isArray(jsonBody.data) ? '数组' : typeof jsonBody.data;
+                        console.log(`📊 数据类型: ${dataType}`);
+
+                        if (Array.isArray(jsonBody.data)) {
+                            console.log(`📊 数据数量: ${jsonBody.data.length}`);
+
+                            // 如果是职位信息
+                            if (jsonBody.data.length > 0 && jsonBody.data[0].adminOrg_name) {
+                                console.log("🏢 组织职位信息:");
+                                jsonBody.data.forEach((item, index) => {
+                                    console.log(`   📋 职位 ${index + 1}:`);
+                                    console.log(`      组织: ${item.adminOrg_name || '未知'}`);
+                                    console.log(`      职位: ${item.position_name || '未知'}`);
+                                    console.log(`      公司: ${item.companyOrg_name || '未知'}`);
+                                    if (item.adminOrg_id) {
+                                        console.log(`      组织ID: ${item.adminOrg_id}`);
+                                    }
+                                    if (item.position_id) {
+                                        console.log(`      职位ID: ${item.position_id}`);
+                                    }
+                                });
+                            }
+
+                            // 如果是休假信息
+                            if (jsonBody.data.length > 0 && (jsonBody.data[0].applyDate || jsonBody.data[0].leaveType)) {
+                                console.log("🏖️ 休假申请信息:");
+                                jsonBody.data.forEach((item, index) => {
+                                    console.log(`   📋 申请 ${index + 1}:`);
+                                    if (item.applyDate) console.log(`      申请日期: ${item.applyDate}`);
+                                    if (item.leaveType) console.log(`      休假类型: ${item.leaveType}`);
+                                    if (item.startDate) console.log(`      开始时间: ${item.startDate}`);
+                                    if (item.endDate) console.log(`      结束时间: ${item.endDate}`);
+                                    if (item.reason) console.log(`      申请原因: ${item.reason}`);
+                                    if (item.status) console.log(`      审批状态: ${item.status}`);
+                                });
+                            }
+                        } else if (typeof jsonBody.data === 'object') {
+                            // 如果是用户认证信息
+                            if (jsonBody.data.unionid || jsonBody.data.openid) {
+                                console.log("👤 用户认证信息:");
+                                if (jsonBody.data.unionid) {
+                                    const masked = jsonBody.data.unionid.substring(0, 6) + "..." + jsonBody.data.unionid.substring(jsonBody.data.unionid.length - 4);
+                                    console.log(`   UnionID: ${masked}`);
+                                }
+                                if (jsonBody.data.openid) {
+                                    const masked = jsonBody.data.openid.substring(0, 6) + "..." + jsonBody.data.openid.substring(jsonBody.data.openid.length - 4);
+                                    console.log(`   OpenID: ${masked}`);
+                                }
+                                if (jsonBody.data.session_key) {
+                                    console.log(`   Session Key: ${jsonBody.data.session_key}`);
+                                }
+                            }
+                        }
+                    }
+
+                    // 特殊处理各种业务场景的响应
+                    if (url.includes("saveData")) {
+                        console.log("📝 日报提交结果分析:");
+                        if (jsonBody.msg === 'success') {
+                            console.log("   ✅ 日报提交成功");
+                        } else {
+                            console.log("   ❌ 日报提交失败");
+                            if (jsonBody.message) {
+                                console.log(`   错误信息: ${jsonBody.message}`);
+                            }
+                        }
+                    } else if (url.includes("xj") || url.includes("vacation")) {
+                        console.log("🏖️ 休假相关结果分析:");
+                        if (jsonBody.msg === 'success') {
+                            console.log("   ✅ 休假操作成功");
+                        } else {
+                            console.log("   ❌ 休假操作失败");
+                            if (jsonBody.message) {
+                                console.log(`   错误信息: ${jsonBody.message}`);
+                            }
+                        }
+                    }
+
                 } catch (e) {
                     console.log(`   ${body}`);
                     console.log("   (非JSON格式或解析错误)");
@@ -465,7 +562,11 @@ function handleResponse() {
         notificationBodyNotify = "提交工作日报";
     } else if (url.includes("DailyReportBill")) {
         apiTypeNotify = "📊 日报相关";
-    } else if (url.includes("leave") || url.includes("vacation")) { // 新增：休假相关
+    } else if (url.includes("bc/")) {
+        apiTypeNotify = "🏢 基础服务";
+    } else if (url.includes("projectmanage")) {
+        apiTypeNotify = "📋 项目管理";
+    } else if (url.includes("xj") || url.includes("vacation")) { // 新增：休假相关
         apiTypeNotify = "🏖️ 休假相关";
         notificationBodyNotify = "处理休假申请/查询";
     } // ... 其他类型判断
@@ -482,8 +583,8 @@ function handleResponse() {
 }
 
 // 主执行逻辑
-if (typeof $request !== "undefined") {
-    // 处理请求
+if (typeof $request !== "undefined" && typeof $response === "undefined") {
+    // 仅处理请求
     handleRequest();
 } else if (typeof $response !== "undefined") {
     // 处理响应
