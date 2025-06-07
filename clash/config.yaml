@@ -1,7 +1,7 @@
 # 机场订阅配置
 proxy-providers:
   Halo: 
-    url: "https://sub-halo-zone-373zezn3ce9e-1337395636.eo-edgefunctions1.com/api/v1/portal/tenant?token=b7d2fd264cd578043526abaa56ae1bec" 
+    url: "" 
     type: http
     interval: 86400
     health-check:
@@ -12,7 +12,7 @@ proxy-providers:
     override:
       udp: true
   Airdeer: 
-    url: "https://plana.ilu-subscription.com/s/a0025e054b642979ebc9afd8ddc68947" 
+    url: "" 
     type: http
     interval: 86400
     health-check:
