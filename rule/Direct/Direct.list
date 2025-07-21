@@ -74,6 +74,8 @@ DOMAIN-SUFFIX,oshwhub.com
 # 回音
 DOMAIN-SUFFIX,xinyuhole.com
 DOMAIN-SUFFIX,oss.xinyuhole.com
+# 万花筒
+DOMAIN-SUFFIX,0x3.com
 
 # 私人博客
 DOMAIN-SUFFIX,lszi.net
