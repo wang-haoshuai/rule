@@ -286,8 +286,8 @@ function generateRegionProxyGroups() {
         {
             name: '美国',
             emoji: '🇺🇲',
-            filter: '(?=.*(美|US|(?i)States|America|洛杉矶|旧金山))^((?!(港|台|日|韩|新)).)*$',
-            manualFilter: '(?=.*(美|US|(?i)States|America|洛杉矶|旧金山))^((?!(港|台|日|韩|新)).)*$'
+            filter: '(?i).*\\b(?:美|US|United\\s*States|States|America|洛杉矶|旧金山|🇺🇸)\\b.*',
+            manualFilter: '(?i).*\\b(?:美|US|United\\s*States|States|America|洛杉矶|旧金山|🇺🇸)\\b.*'
         }
     ];
 
