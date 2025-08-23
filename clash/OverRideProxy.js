@@ -119,23 +119,23 @@ function main(config) {
         }
     };
 
-    // 代理提供者配置
-    config['proxy-providers'] = {
-        Halo: {
-            url: 'https://f6994581a0303d309ceea66fae355f01.sub.perlnk.com',
-            type: 'http',
-            interval: 86400,
-            'health-check': {
-                enable: true,
-                url: 'https://www.gstatic.com/generate_204',
-                interval: 300
-            },
-            proxy: '直连',
-            override: {
-                udp: true
-            }
-        }
-    };
+    // // 代理提供者配置
+    // config['proxy-providers'] = {
+    //     Halo: {
+    //         url: '',
+    //         type: 'http'
+    //         interval: 86400,
+    //         'health-check': {
+    //             enable: true,
+    //             url: 'https://www.gstatic.com/generate_204',
+    //             interval: 300
+    //         },
+    //         proxy: '直连',
+    //         override: {
+    //             udp: true
+    //         }
+    //     }
+    // };
 
     // 确保基础代理存在
     if (!config.proxies) {
@@ -201,14 +201,15 @@ function generateProxyGroups() {
             interval: 300,
             tolerance: 50,
             'include-all': true,
-            filter: '^((?!(直连|流量|套餐|重置|官网|剩余)).)*$'
+            filter: '^((?!(直连|流量|套餐|重置|官网|剩余|月末福利)).)*$'
         },
 
         // 全部节点
         {
             name: '🌐 全部节点',
             type: 'select',
-            'include-all': true
+            'include-all': true,
+            filter: '^((?!(直连|流量|套餐|重置|官网|剩余|月末福利)).)*$'
         },
 
         // 应用分流策略组
@@ -267,8 +268,8 @@ function generateRegionProxyGroups() {
         {
             name: '台湾',
             emoji: '🇹🇼',
-            filter: '(?i)台|tw|taiwan|formosa|台湾|台灣',
-            manualFilter: '(?i)台|tw|taiwan|formosa|台湾|台灣'
+            filter: '(?i)台|tw|taiwan|formosa|台湾|台灣|tai wan|🇨🇳',
+            manualFilter: '(?i)台|tw|taiwan|formosa|台湾|台灣|tai wan|🇨🇳'
         },
         {
             name: '日本',
@@ -286,7 +287,7 @@ function generateRegionProxyGroups() {
             name: '美国',
             emoji: '🇺🇲',
             filter: '(?=.*(美|US|(?i)States|America|洛杉矶|旧金山))^((?!(港|台|日|韩|新)).)*$',
-            manualFilter: '(?i)美|us|unitedstates|united states|america'
+            manualFilter: '(?=.*(美|US|(?i)States|America|洛杉矶|旧金山))^((?!(港|台|日|韩|新)).)*$'
         }
     ];
 
@@ -350,7 +351,7 @@ function generateRegionProxyGroups() {
     });
 
     // 其他地区
-    const otherFilter = '(?i)^(?!.*(港|hk|hongkong|hong kong|台|tw|taiwan|台湾|台灣|formosa|日|jp|japan|新|sg|singapore|狮城|lion city|美|us|united states|america|直连|流量|套餐|重置|官网|剩余)).*$';
+    const otherFilter = '(?i)^(?!.*(港|hk|hongkong|hong kong|台|tw|taiwan|台湾|台灣|formosa|日|jp|japan|新|sg|singapore|狮城|lion city|美|us|united states|america|直连|流量|套餐|重置|官网|剩余|月末福利|洛杉矶|东京|旧金山|Tai Wan|🇨🇳)).*$';
 
     groups.push(
         {
@@ -627,6 +628,3 @@ function dynamicConfigModifications(config) {
 
     return config;
 }
-
-// 导出主函数
-// module.exports = main;
