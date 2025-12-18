@@ -1,7 +1,7 @@
 /**
- * Clash JavaScript 配置覆写扩展 - 最终修复版 (v2.1)
- * * 修复：将所有 '直连' 替换为系统核心关键字 'DIRECT'，解决启动报错
- * * 功能：包含 aTrust VPN 修复、游戏/流媒体/AI 增强分流
+ * Clash JavaScript 配置覆写扩展 - 修复版 v2.2
+ * * 修复 1: 彻底解决 '直连' 报错，统一使用 'DIRECT'
+ * * 修复 2: 替换失效的 ghproxy 镜像源，改用 jsDelivr CDN (更稳定，无证书错误)
  */
 
 function main(config) {
@@ -21,13 +21,15 @@ function main(config) {
     };
     Object.assign(config, globalOverrides);
 
-    // --- 2. 外部资源镜像 ---
-    const mirrorUrl = 'https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest';
+    // --- 2. 外部资源镜像 (关键修复：使用 jsDelivr CDN) ---
+    // 之前的 mirror.ghproxy.com 证书已挂，改为 jsDelivr 直连 CDN
+    const geoBase = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release';
+    
     config['geox-url'] = {
-        geoip: `${mirrorUrl}/geoip-lite.dat`,
-        geosite: `${mirrorUrl}/geosite.dat`,
-        mmdb: `${mirrorUrl}/country-lite.mmdb`,
-        asn: `${mirrorUrl}/GeoLite2-ASN.mmdb`
+        geoip: `${geoBase}/geoip-lite.dat`,
+        geosite: `${geoBase}/geosite.dat`,
+        mmdb: `${geoBase}/country-lite.mmdb`,
+        asn: `${geoBase}/GeoLite2-ASN.mmdb`
     };
     config['geo-auto-update'] = true;
     config['geo-update-interval'] = 24;
@@ -44,7 +46,7 @@ function main(config) {
             // === VPN 防劫持 ===
             '+.sangfor.com.cn',
             '+.sangfor.com',
-            '+.vpn.crceg.cn', // 你提供的公司VPN域名
+            '+.vpn.crceg.cn', // 公司VPN
             // 基础过滤
             'rule-set:private_domain,cn_domain',
             '*.lan', '*.local',
@@ -109,7 +111,7 @@ function main(config) {
 // ---------------- 辅助函数 ----------------
 
 function generateProxyGroups() {
-    // 关键修复：这里的 'DIRECT' 必须是大写英文，不能是 '直连'
+    // 关键修复：全部使用 'DIRECT'，严禁使用中文 '直连'
     const baseProxies = [
         '🚀 默认代理',
         '🇭🇰 香港-场景',
@@ -217,7 +219,6 @@ function generateRules() {
         'DOMAIN-SUFFIX,sangfor.com,🎯 全球直连',
         'DOMAIN-KEYWORD,sangfor,🎯 全球直连',
         'DOMAIN-KEYWORD,atrust,🎯 全球直连',
-        // 你的公司 VPN 关键词
         'DOMAIN-KEYWORD,crceg,🎯 全球直连', 
         'DOMAIN-SUFFIX,vpn.crceg.cn,🎯 全球直连',
 
@@ -258,7 +259,9 @@ function generateRules() {
 }
 
 function generateRuleProviders() {
-    const mirror = 'https://mirror.ghproxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo';
+    // 关键修复：使用 jsDelivr CDN 加速，解决证书报错
+    const mirror = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo';
+    
     const provider = (path, type = 'domain') => ({
         type: 'http',
         interval: 86400,
