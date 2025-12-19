@@ -1,7 +1,7 @@
 /**
- * Clash JavaScript 配置覆写扩展 - 修复版 v2.2
- * * 修复 1: 彻底解决 '直连' 报错，统一使用 'DIRECT'
- * * 修复 2: 替换失效的 ghproxy 镜像源，改用 jsDelivr CDN (更稳定，无证书错误)
+ * Clash JavaScript 配置覆写扩展 - v2.5 定制版
+ * * 修改 1: AI 策略组命名锁定为 "AI节点"
+ * * 修改 2: AI 规则集切换为 ACL4SSR 源 (已自动 CDN 加速)
  */
 
 function main(config) {
@@ -21,8 +21,7 @@ function main(config) {
     };
     Object.assign(config, globalOverrides);
 
-    // --- 2. 外部资源镜像 (关键修复：使用 jsDelivr CDN) ---
-    // 之前的 mirror.ghproxy.com 证书已挂，改为 jsDelivr 直连 CDN
+    // --- 2. 外部资源镜像 (Meta 规则) ---
     const geoBase = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release';
     
     config['geox-url'] = {
@@ -46,7 +45,7 @@ function main(config) {
             // === VPN 防劫持 ===
             '+.sangfor.com.cn',
             '+.sangfor.com',
-            '+.vpn.crceg.cn', // 公司VPN
+            '+.vpn.crceg.cn', 
             // 基础过滤
             'rule-set:private_domain,cn_domain',
             '*.lan', '*.local',
@@ -111,7 +110,6 @@ function main(config) {
 // ---------------- 辅助函数 ----------------
 
 function generateProxyGroups() {
-    // 关键修复：全部使用 'DIRECT'，严禁使用中文 '直连'
     const baseProxies = [
         '🚀 默认代理',
         '🇭🇰 香港-场景',
@@ -119,7 +117,7 @@ function generateProxyGroups() {
         '🇺🇲 美国-场景',
         '🇸🇬 新加坡-场景',
         '🇹🇼 台湾-场景',
-        '♻️ 自动选择',
+        '♻️ 自动选择', 
         '🌐 全部节点',
         'DIRECT' 
     ];
@@ -137,7 +135,6 @@ function generateProxyGroups() {
             interval: 300,
             tolerance: 50,
             'include-all': true,
-            // 过滤掉 DIRECT 关键字
             filter: '^(?!.*(直连|DIRECT|重置|流量|官网|套餐|剩余)).*$'
         },
         {
@@ -161,7 +158,7 @@ function generateProxyGroups() {
 
 function generateAppProxyGroups(baseProxies) {
     const apps = [
-        { name: '🤖 ChatGPT', icon: '🤖' },
+        { name: 'AI节点', icon: '🤖' },    // <--- 修改点：严格命名为 "AI节点"
         { name: '📹 YouTube', icon: '📹' },
         { name: '🍀 Google', icon: '🍀' },
         { name: '👨🏿‍💻 GitHub', icon: '👨🏿‍💻' },
@@ -197,14 +194,29 @@ function generateRegionProxyGroups() {
 
     const groups = [];
     regions.forEach(r => {
+        const autoGroupName = `⚡ ${r.name}-自动`;
         groups.push({
-            name: `${r.emoji} ${r.name}-场景`,
+            name: autoGroupName,
             type: 'url-test',
             url: 'https://www.gstatic.com/generate_204',
             interval: 300,
             tolerance: 50,
             'include-all': true,
             filter: r.filter
+        });
+
+        const manualGroupName = `🖐🏻 ${r.name}-手动`;
+        groups.push({
+            name: manualGroupName,
+            type: 'select',
+            'include-all': true,
+            filter: r.filter
+        });
+
+        groups.push({
+            name: `${r.emoji} ${r.name}-场景`,
+            type: 'select',
+            proxies: [autoGroupName, manualGroupName, 'DIRECT']
         });
     });
     return groups;
@@ -214,19 +226,20 @@ function generateRules() {
     return [
         'RULE-SET,category-ads-all,REJECT',
 
-        // === VPN 与 内网 直连 ===
+        // VPN & 内网
         'DOMAIN-SUFFIX,sangfor.com.cn,🎯 全球直连', 
         'DOMAIN-SUFFIX,sangfor.com,🎯 全球直连',
         'DOMAIN-KEYWORD,sangfor,🎯 全球直连',
         'DOMAIN-KEYWORD,atrust,🎯 全球直连',
         'DOMAIN-KEYWORD,crceg,🎯 全球直连', 
         'DOMAIN-SUFFIX,vpn.crceg.cn,🎯 全球直连',
-
         'RULE-SET,private_domain,🎯 全球直连',
         'GEOIP,LAN,🎯 全球直连,no-resolve',
 
-        // === 应用分流 ===
-        'RULE-SET,ai,🤖 ChatGPT',
+        // === AI 分流 (使用新组名 "AI节点") ===
+        'RULE-SET,ai,AI节点', // <--- 指向新组名
+
+        // === 其他应用 ===
         'RULE-SET,youtube_domain,📹 YouTube',
         'RULE-SET,google_domain,🍀 Google',
         'RULE-SET,github_domain,👨🏿‍💻 GitHub',
@@ -259,43 +272,54 @@ function generateRules() {
 }
 
 function generateRuleProviders() {
-    // 关键修复：使用 jsDelivr CDN 加速，解决证书报错
-    const mirror = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo';
+    // Meta 规则镜像
+    const metaMirror = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo';
     
-    const provider = (path, type = 'domain') => ({
+    // 辅助函数：Meta 二进制规则
+    const mrsProvider = (path, type = 'domain') => ({
         type: 'http',
         interval: 86400,
         behavior: type,
         format: 'mrs',
-        url: `${mirror}/${path}.mrs`
+        url: `${metaMirror}/${path}.mrs`
     });
 
     return {
-        private_domain: provider('geosite/private'),
-        'category-ads-all': provider('geosite/category-ads-all'),
-        ai: provider('geosite/category-ai-chat-!cn'),
-        youtube_domain: provider('geosite/youtube'),
-        google_domain: provider('geosite/google'),
-        github_domain: provider('geosite/github'),
-        telegram_domain: provider('geosite/telegram'),
-        tiktok_domain: provider('geosite/tiktok'),
-        onedrive_domain: provider('geosite/onedrive'),
-        microsoft_domain: provider('geosite/microsoft'),
-        apple_domain: provider('geosite/apple-cn'),
-        speedtest_domain: provider('geosite/ookla-speedtest'),
-        paypal_domain: provider('geosite/paypal'),
-        netflix_domain: provider('geosite/netflix'),
-        disney_domain: provider('geosite/disney'),
-        spotify_domain: provider('geosite/spotify'),
-        primevideo_domain: provider('geosite/primevideo'),
-        steam_domain: provider('geosite/steam'),
-        games_domain: provider('geosite/category-games'),
-        gfw_domain: provider('geosite/gfw'),
-        'geolocation-!cn': provider('geosite/geolocation-!cn'),
-        cn_domain: provider('geosite/cn'),
-        cn_ip: provider('geoip/cn', 'ipcidr'),
-        google_ip: provider('geoip/google', 'ipcidr'),
-        telegram_ip: provider('geoip/telegram', 'ipcidr'),
-        netflix_ip: provider('geoip/netflix', 'ipcidr')
+        // === 修改点：AI 规则集切换为 ACL4SSR ===
+        ai: {
+            type: 'http',
+            interval: 86400,
+            behavior: 'classical', // .list 文件通常是混合类型
+            format: 'text',        // 文本格式
+            // 使用 jsDelivr 加速 ACL4SSR 仓库，避免 raw.githubusercontent.com 连接失败
+            url: 'https://fastly.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/Ruleset/AI.list'
+        },
+
+        // 其他规则保持 Meta 源
+        private_domain: mrsProvider('geosite/private'),
+        'category-ads-all': mrsProvider('geosite/category-ads-all'),
+        youtube_domain: mrsProvider('geosite/youtube'),
+        google_domain: mrsProvider('geosite/google'),
+        github_domain: mrsProvider('geosite/github'),
+        telegram_domain: mrsProvider('geosite/telegram'),
+        tiktok_domain: mrsProvider('geosite/tiktok'),
+        onedrive_domain: mrsProvider('geosite/onedrive'),
+        microsoft_domain: mrsProvider('geosite/microsoft'),
+        apple_domain: mrsProvider('geosite/apple-cn'),
+        speedtest_domain: mrsProvider('geosite/ookla-speedtest'),
+        paypal_domain: mrsProvider('geosite/paypal'),
+        netflix_domain: mrsProvider('geosite/netflix'),
+        disney_domain: mrsProvider('geosite/disney'),
+        spotify_domain: mrsProvider('geosite/spotify'),
+        primevideo_domain: mrsProvider('geosite/primevideo'),
+        steam_domain: mrsProvider('geosite/steam'),
+        games_domain: mrsProvider('geosite/category-games'),
+        gfw_domain: mrsProvider('geosite/gfw'),
+        'geolocation-!cn': mrsProvider('geosite/geolocation-!cn'),
+        cn_domain: mrsProvider('geosite/cn'),
+        cn_ip: mrsProvider('geoip/cn', 'ipcidr'),
+        google_ip: mrsProvider('geoip/google', 'ipcidr'),
+        telegram_ip: mrsProvider('geoip/telegram', 'ipcidr'),
+        netflix_ip: mrsProvider('geoip/netflix', 'ipcidr')
     };
 }
