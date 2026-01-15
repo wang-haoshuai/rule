@@ -88,3 +88,7 @@ DOMAIN-SUFFIX,fzxhmy.com
 
 # halo 域名
 DOMAIN-SUFFIX,app.halo.do
+
+# xiercloud 直连
+DOMAIN-SUFFIX,panel.xiercloud.uk
+DOMAIN-SUFFIX,cdn.xiercloud.uk
