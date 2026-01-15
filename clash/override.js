@@ -1,325 +1,315 @@
+// Clash Verge Rev / Clash Party 覆写脚本
+// 修复版本：保留原配置的 proxies，正确处理"直连"节点
+
 /**
- * Clash JavaScript 配置覆写扩展 - v2.5 定制版
- * * 修改 1: AI 策略组命名锁定为 "AI节点"
- * * 修改 2: AI 规则集切换为 ACL4SSR 源 (已自动 CDN 加速)
+ * 主入口函数
+ * @param {Object} config - 原始配置对象
+ * @returns {Object} - 修改后的配置对象
  */
-
 function main(config) {
-    // --- 1. 基础全局配置 ---
-    const globalOverrides = {
-        'mixed-port': 7890,
-        'allow-lan': true,
-        'bind-address': '*',
-        ipv6: false,
-        'unified-delay': true,
-        'tcp-concurrent': true,
-        'log-level': 'info',
-        'find-process-mode': 'strict',
-        'global-client-fingerprint': 'chrome',
-        'keep-alive-idle': 600,
-        'keep-alive-interval': 15
-    };
-    Object.assign(config, globalOverrides);
-
-    // --- 2. 外部资源镜像 (Meta 规则) ---
-    const geoBase = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release';
+  // ==================== 配置开关（按需修改）====================
+  const settings = {
+    // TUN 模式开关：true = TUN 全接管，false = 仅系统代理
+    tunMode: false,
     
-    config['geox-url'] = {
-        geoip: `${geoBase}/geoip-lite.dat`,
-        geosite: `${geoBase}/geosite.dat`,
-        mmdb: `${geoBase}/country-lite.mmdb`,
-        asn: `${geoBase}/GeoLite2-ASN.mmdb`
-    };
-    config['geo-auto-update'] = true;
-    config['geo-update-interval'] = 24;
-
-    // --- 3. 增强型 DNS 配置 ---
-    config.dns = {
-        enable: true,
-        listen: '0.0.0.0:1053',
-        ipv6: false,
-        'respect-rules': true,
-        'enhanced-mode': 'fake-ip',
-        'fake-ip-range': '198.18.0.1/16',
-        'fake-ip-filter': [
-            // === VPN 防劫持 ===
-            '+.sangfor.com.cn',
-            '+.sangfor.com',
-            '+.vpn.crceg.cn', 
-            // 基础过滤
-            'rule-set:private_domain,cn_domain',
-            '*.lan', '*.local',
-            'login.microsoftonline.com', 
-            '*.msftconnecttest.com', 
-            '*.msftncsi.com'
-        ],
-        'default-nameserver': ['223.5.5.5', '119.29.29.29'],
-        nameserver: [
-            'https://dns.alidns.com/dns-query',
-            'https://doh.pub/dns-query'
-        ],
-        fallback: [
-            'https://dns.google/dns-query',
-            'https://1.1.1.1/dns-query',
-            'tls://8.8.4.4'
-        ],
-        'fallback-filter': {
-            geoip: true,
-            'geoip-code': 'CN',
-            ipcidr: ['240.0.0.0/4']
-        },
-        'nameserver-policy': {
-            'geosite:cn,private,apple-cn': ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query'],
-            '*.sangfor.com.cn': ['https://dns.alidns.com/dns-query'],
-            '*.vpn.crceg.cn': ['https://dns.alidns.com/dns-query'],
-            'geosite:google,youtube,telegram,gfw,netflix': ['https://dns.google/dns-query']
-        }
-    };
-
-    // --- 4. TUN 与嗅探 ---
-    config.tun = {
-        enable: true,
-        stack: 'mixed',
-        'dns-hijack': ['any:53'],
-        'auto-route': true,
-        'auto-detect-interface': true
-    };
-
-    config.sniffer = {
-        enable: true,
-        parsePTS: true,
-        sniff: {
-            HTTP: { ports: [80, '8080-8880'], 'override-destination': true },
-            TLS: { ports: [443, 8443] },
-            QUIC: { ports: [443, 8443] }
-        }
-    };
-
-    // --- 5. 策略组生成 ---
-    config['proxy-groups'] = generateProxyGroups();
-
-    // --- 6. 规则生成 ---
-    config.rules = generateRules();
-
-    // --- 7. 规则提供者 ---
-    config['rule-providers'] = generateRuleProviders();
-
-    return config;
-}
-
-// ---------------- 辅助函数 ----------------
-
-function generateProxyGroups() {
-    const baseProxies = [
-        '🚀 默认代理',
-        '🇭🇰 香港-场景',
-        '🇯🇵 日本-场景',
-        '🇺🇲 美国-场景',
-        '🇸🇬 新加坡-场景',
-        '🇹🇼 台湾-场景',
-        '♻️ 自动选择', 
-        '🌐 全部节点',
-        'DIRECT' 
-    ];
-
-    return [
-        {
-            name: '🚀 默认代理',
-            type: 'select',
-            proxies: ['♻️ 自动选择', '🇭🇰 香港-场景', '🇯🇵 日本-场景', '🇺🇲 美国-场景', '🇸🇬 新加坡-场景', '🇹🇼 台湾-场景', '🌐 全部节点', 'DIRECT']
-        },
-        {
-            name: '♻️ 自动选择',
-            type: 'url-test',
-            url: 'https://www.gstatic.com/generate_204',
-            interval: 300,
-            tolerance: 50,
-            'include-all': true,
-            filter: '^(?!.*(直连|DIRECT|重置|流量|官网|套餐|剩余)).*$'
-        },
-        {
-            name: '🌐 全部节点',
-            type: 'select',
-            'include-all': true,
-            filter: '^(?!.*(直连|DIRECT|重置|流量|官网|套餐|剩余)).*$'
-        },
-
-        // 应用分流组
-        ...generateAppProxyGroups(baseProxies),
-
-        // 地区场景组
-        ...generateRegionProxyGroups(),
-
-        // 兜底组
-        { name: '🎯 全球直连', type: 'select', proxies: ['DIRECT'] },
-        { name: '🐟 漏网之鱼', type: 'select', proxies: ['🚀 默认代理', 'DIRECT'] }
-    ];
-}
-
-function generateAppProxyGroups(baseProxies) {
-    const apps = [
-        { name: 'AI节点', icon: '🤖' },    // <--- 修改点：严格命名为 "AI节点"
-        { name: '📹 YouTube', icon: '📹' },
-        { name: '🍀 Google', icon: '🍀' },
-        { name: '👨🏿‍💻 GitHub', icon: '👨🏿‍💻' },
-        { name: '📲 Telegram', icon: '📲' },
-        { name: '🎥 NETFLIX', icon: '🎥' },
-        { name: '🐭 Disney+', icon: '🐭' },
-        { name: '🎧 Spotify', icon: '🎧' },
-        { name: '📺 Prime Video', icon: '📺' },
-        { name: '🎮 Steam', icon: '🎮' },
-        { name: '🐬 OneDrive', icon: '🐬' },
-        { name: '🪟 Microsoft', icon: '🪟' },
-        { name: '🎵 TikTok', icon: '🎵' },
-        { name: '🍎 Apple', icon: '🍎' },
-        { name: '✈️ Speedtest', icon: '✈️' },
-        { name: '💶 PayPal', icon: '💶' }
-    ];
-
-    return apps.map(app => ({
-        name: app.name,
-        type: 'select',
-        proxies: baseProxies
-    }));
-}
-
-function generateRegionProxyGroups() {
-    const regions = [
-        { name: '香港', emoji: '🇭🇰', filter: '(?i)港|香港|hk|hong' },
-        { name: '台湾', emoji: '🇹🇼', filter: '(?i)台|tw|台湾|taiwan' },
-        { name: '日本', emoji: '🇯🇵', filter: '(?i)日|东京|大阪|jp|japan' },
-        { name: '新加坡', emoji: '🇸🇬', filter: '(?i)新|新加坡|sg|singapore' },
-        { name: '美国', emoji: '🇺🇲', filter: '(?i)美|美国|洛杉矶|旧金山|us|united' }
-    ];
-
-    const groups = [];
-    regions.forEach(r => {
-        const autoGroupName = `⚡ ${r.name}-自动`;
-        groups.push({
-            name: autoGroupName,
-            type: 'url-test',
-            url: 'https://www.gstatic.com/generate_204',
-            interval: 300,
-            tolerance: 50,
-            'include-all': true,
-            filter: r.filter
-        });
-
-        const manualGroupName = `🖐🏻 ${r.name}-手动`;
-        groups.push({
-            name: manualGroupName,
-            type: 'select',
-            'include-all': true,
-            filter: r.filter
-        });
-
-        groups.push({
-            name: `${r.emoji} ${r.name}-场景`,
-            type: 'select',
-            proxies: [autoGroupName, manualGroupName, 'DIRECT']
-        });
-    });
-    return groups;
-}
-
-function generateRules() {
-    return [
-        'RULE-SET,category-ads-all,REJECT',
-
-        // VPN & 内网
-        'DOMAIN-SUFFIX,sangfor.com.cn,🎯 全球直连', 
-        'DOMAIN-SUFFIX,sangfor.com,🎯 全球直连',
-        'DOMAIN-KEYWORD,sangfor,🎯 全球直连',
-        'DOMAIN-KEYWORD,atrust,🎯 全球直连',
-        'DOMAIN-KEYWORD,crceg,🎯 全球直连', 
-        'DOMAIN-SUFFIX,vpn.crceg.cn,🎯 全球直连',
-        'RULE-SET,private_domain,🎯 全球直连',
-        'GEOIP,LAN,🎯 全球直连,no-resolve',
-
-        // === AI 分流 (使用新组名 "AI节点") ===
-        'RULE-SET,ai,AI节点', // <--- 指向新组名
-
-        // === 其他应用 ===
-        'RULE-SET,youtube_domain,📹 YouTube',
-        'RULE-SET,google_domain,🍀 Google',
-        'RULE-SET,github_domain,👨🏿‍💻 GitHub',
-        'RULE-SET,telegram_domain,📲 Telegram',
-        'RULE-SET,netflix_domain,🎥 NETFLIX',
-        'RULE-SET,disney_domain,🐭 Disney+',
-        'RULE-SET,spotify_domain,🎧 Spotify',
-        'RULE-SET,primevideo_domain,📺 Prime Video',
-        'RULE-SET,steam_domain,🎮 Steam',
-        'RULE-SET,games_domain,🎮 Steam',
-        'RULE-SET,tiktok_domain,🎵 TikTok',
-        'RULE-SET,onedrive_domain,🐬 OneDrive',
-        'RULE-SET,microsoft_domain,🪟 Microsoft',
-        'RULE-SET,apple_domain,🍎 Apple',
-        'RULE-SET,speedtest_domain,✈️ Speedtest',
-        'RULE-SET,paypal_domain,💶 PayPal',
-
-        // === 兜底 ===
-        'RULE-SET,gfw_domain,🚀 默认代理',
-        'RULE-SET,geolocation-!cn,🚀 默认代理',
-        'RULE-SET,cn_domain,🎯 全球直连',
-        'RULE-SET,cn_ip,🎯 全球直连',
-        
-        'RULE-SET,google_ip,🍀 Google,no-resolve',
-        'RULE-SET,netflix_ip,🎥 NETFLIX,no-resolve',
-        'RULE-SET,telegram_ip,📲 Telegram,no-resolve',
-        
-        'MATCH,🐟 漏网之鱼'
-    ];
-}
-
-function generateRuleProviders() {
-    // Meta 规则镜像
-    const metaMirror = 'https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo';
+    // DNS 防泄露开关：true = 启用防泄露 DNS 策略
+    dnsAntiLeak: true,
     
-    // 辅助函数：Meta 二进制规则
-    const mrsProvider = (path, type = 'domain') => ({
-        type: 'http',
-        interval: 86400,
-        behavior: type,
-        format: 'mrs',
-        url: `${metaMirror}/${path}.mrs`
-    });
+    // 局域网共享开关
+    allowLan: true,
+    
+    // 嗅探开关（fakeip 下可关闭以提升性能）
+    snifferEnable: true,
+    
+    // 日志级别：silent / error / warning / info / debug
+    logLevel: "warning",
+  };
 
-    return {
-        // === 修改点：AI 规则集切换为 ACL4SSR ===
-        ai: {
-            type: 'http',
-            interval: 86400,
-            behavior: 'classical', // .list 文件通常是混合类型
-            format: 'text',        // 文本格式
-            // 使用 jsDelivr 加速 ACL4SSR 仓库，避免 raw.githubusercontent.com 连接失败
-            url: 'https://fastly.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/Ruleset/AI.list'
-        },
+  // ==================== 保留原配置的 proxies ====================
+  // 确保"直连"节点存在
+  if (!config.proxies) {
+    config.proxies = [];
+  }
+  
+  // 检查是否已有"直连"节点，没有则添加
+  const hasDirectProxy = config.proxies.some(p => p.name === "直连");
+  if (!hasDirectProxy) {
+    config.proxies.unshift({ name: "直连", type: "direct" });
+  }
 
-        // 其他规则保持 Meta 源
-        private_domain: mrsProvider('geosite/private'),
-        'category-ads-all': mrsProvider('geosite/category-ads-all'),
-        youtube_domain: mrsProvider('geosite/youtube'),
-        google_domain: mrsProvider('geosite/google'),
-        github_domain: mrsProvider('geosite/github'),
-        telegram_domain: mrsProvider('geosite/telegram'),
-        tiktok_domain: mrsProvider('geosite/tiktok'),
-        onedrive_domain: mrsProvider('geosite/onedrive'),
-        microsoft_domain: mrsProvider('geosite/microsoft'),
-        apple_domain: mrsProvider('geosite/apple-cn'),
-        speedtest_domain: mrsProvider('geosite/ookla-speedtest'),
-        paypal_domain: mrsProvider('geosite/paypal'),
-        netflix_domain: mrsProvider('geosite/netflix'),
-        disney_domain: mrsProvider('geosite/disney'),
-        spotify_domain: mrsProvider('geosite/spotify'),
-        primevideo_domain: mrsProvider('geosite/primevideo'),
-        steam_domain: mrsProvider('geosite/steam'),
-        games_domain: mrsProvider('geosite/category-games'),
-        gfw_domain: mrsProvider('geosite/gfw'),
-        'geolocation-!cn': mrsProvider('geosite/geolocation-!cn'),
-        cn_domain: mrsProvider('geosite/cn'),
-        cn_ip: mrsProvider('geoip/cn', 'ipcidr'),
-        google_ip: mrsProvider('geoip/google', 'ipcidr'),
-        telegram_ip: mrsProvider('geoip/telegram', 'ipcidr'),
-        netflix_ip: mrsProvider('geoip/netflix', 'ipcidr')
+  // ==================== 全局配置 ====================
+  config["mixed-port"] = 7890;
+  config["allow-lan"] = settings.allowLan;
+  config["bind-address"] = settings.allowLan ? "*" : "127.0.0.1";
+  config["mode"] = "rule";
+  config["log-level"] = settings.logLevel;
+  config["ipv6"] = false;
+  config["unified-delay"] = true;
+  config["tcp-concurrent"] = true;
+  config["global-client-fingerprint"] = "chrome";
+  config["keep-alive-idle"] = 600;
+  config["keep-alive-interval"] = 15;
+
+  // ==================== Profile ====================
+  config["profile"] = {
+    "store-selected": true,
+    "store-fake-ip": true,
+  };
+
+  // ==================== TUN 配置 ====================
+  config["tun"] = {
+    enable: true,
+    stack: "mixed",
+    "dns-hijack": ["any:53", "tcp://any:53"],
+    "auto-route": settings.tunMode,
+    "auto-redirect": settings.tunMode,
+    "auto-detect-interface": settings.tunMode,
+  };
+
+  // ==================== 嗅探配置 ====================
+  config["sniffer"] = {
+    enable: settings.snifferEnable,
+    sniff: {
+      HTTP: {
+        ports: [80, "8080-8880"],
+        "override-destination": true,
+      },
+      TLS: {
+        ports: [443, 8443],
+      },
+      QUIC: {
+        ports: [443, 8443],
+      },
+    },
+    "skip-domain": ["Mijia Cloud", "+.push.apple.com"],
+  };
+
+  // ==================== DNS 配置 ====================
+  const domesticDns = [
+    "https://dns.alidns.com/dns-query",
+    "https://doh.pub/dns-query",
+  ];
+
+  const proxyDns = [
+    "https://dns.google/dns-query#🚀 默认代理",
+    "https://cloudflare-dns.com/dns-query#🚀 默认代理",
+  ];
+
+  config["dns"] = {
+    enable: true,
+    "cache-algorithm": "arc",
+    listen: settings.dnsAntiLeak ? "127.0.0.1:1053" : "0.0.0.0:1053",
+    ipv6: false,
+    "respect-rules": true,
+    "enhanced-mode": "fake-ip",
+    "fake-ip-range": "28.0.0.1/8",
+    "fake-ip-filter-mode": "blacklist",
+    "fake-ip-filter": ["rule-set:fakeipfilter_domain"],
+    "default-nameserver": ["223.5.5.5", "119.29.29.29"],
+    "proxy-server-nameserver": domesticDns,
+    nameserver: domesticDns,
+  };
+
+  // DNS 防泄露策略
+  if (settings.dnsAntiLeak) {
+    config["dns"]["nameserver-policy"] = {
+      "rule-set:geolocation-!cn": proxyDns,
+      "rule-set:youtube_domain": proxyDns,
+      "rule-set:google_domain": proxyDns,
+      "rule-set:github_domain": proxyDns,
+      "rule-set:telegram_domain": proxyDns,
+      "rule-set:netflix_domain": proxyDns,
+      "rule-set:tiktok_domain": proxyDns,
+      "rule-set:ai": proxyDns,
+      "rule-set:onedrive_domain": proxyDns,
+      "rule-set:microsoft_domain": proxyDns,
+      "rule-set:paypal_domain": proxyDns,
+      "rule-set:cn_domain": domesticDns,
+      "rule-set:private_domain": domesticDns,
+      "rule-set:apple_domain": domesticDns,
     };
+  }
+
+  // ==================== 代理组配置 ====================
+  // 地区筛选正则
+  const regionFilters = {
+    HK: "(?=.*(港|HK|(?i)Hong))^((?!(台|日|韩|新|深|美)).)*$",
+    JP: "(?=.*(日|JP|(?i)Japan))^((?!(港|台|韩|新|美)).)*$",
+    SG: "(?=.*(新加坡|坡|狮城|SG|Singapore))^((?!(台|日|韩|深|美)).)*$",
+    US: "(?=.*(美|US|(?i)States|America))^((?!(港|台|韩|新|日)).)*$",
+    ALL: "^((?!(直连)).)*$",
+  };
+
+  // 通用测速配置
+  const urlTestConfig = {
+    url: "https://www.gstatic.com/generate_204",
+    interval: 300,
+    tolerance: 20,
+    lazy: true,
+  };
+
+  // 地区配置
+  const regions = [
+    { name: "香港", emoji: "🇭🇰", filter: regionFilters.HK },
+    { name: "日本", emoji: "🇯🇵", filter: regionFilters.JP },
+    { name: "狮城", emoji: "🇸🇬", filter: regionFilters.SG },
+    { name: "美国", emoji: "🇺🇲", filter: regionFilters.US },
+  ];
+
+  // 构建代理组
+  const proxyGroups = [];
+
+  // 1. 地区场景组（放最前面）
+  regions.forEach((r) => {
+    proxyGroups.push({
+      name: `${r.emoji} ${r.name}场景`,
+      type: "select",
+      proxies: [`♻️ ${r.name}自动`, `🔯 ${r.name}故转`, `${r.emoji} ${r.name}节点`],
+    });
+  });
+
+  // 2. 业务策略组
+  const sceneProxies = [
+    "🇭🇰 香港场景",
+    "🇯🇵 日本场景",
+    "🇸🇬 狮城场景",
+    "🇺🇲 美国场景",
+    "♻️ 自动选择",
+    "🌐 全部节点",
+    "直连",
+  ];
+
+  proxyGroups.push(
+    { name: "🚀 默认代理", type: "select", proxies: [...sceneProxies] },
+    { name: "📹 YouTube", type: "select", proxies: ["🇺🇲 美国场景", "🇭🇰 香港场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "🍀 Google", type: "select", proxies: [...sceneProxies] },
+    { name: "🤖 ChatGPT", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "👨🏿‍💻 GitHub", type: "select", proxies: [...sceneProxies] },
+    { name: "🐬 OneDrive", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "🪟 Microsoft", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "🎵 TikTok", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "📲 Telegram", type: "select", proxies: [...sceneProxies] },
+    { name: "🎥 NETFLIX", type: "select", proxies: ["🇸🇬 狮城场景", "🇯🇵 日本场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "💶 PayPal", type: "select", proxies: ["🇯🇵 日本场景", "🇭🇰 香港场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
+    { name: "🐟 漏网之鱼", type: "select", proxies: ["🚀 默认代理", "🇭🇰 香港场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "♻️ 自动选择", "🌐 全部节点", "直连"] }
+  );
+
+  // 3. 地区手动选择节点组
+  regions.forEach((r) => {
+    proxyGroups.push({
+      name: `${r.emoji} ${r.name}节点`,
+      type: "select",
+      "include-all": true,
+      filter: r.filter,
+    });
+  });
+
+  // 4. 地区故障转移组
+  regions.forEach((r) => {
+    proxyGroups.push({
+      name: `🔯 ${r.name}故转`,
+      type: "fallback",
+      "include-all": true,
+      url: urlTestConfig.url,
+      interval: urlTestConfig.interval,
+      lazy: urlTestConfig.lazy,
+      filter: r.filter,
+    });
+  });
+
+  // 5. 地区自动测速组
+  regions.forEach((r) => {
+    proxyGroups.push({
+      name: `♻️ ${r.name}自动`,
+      type: "url-test",
+      "include-all": true,
+      url: urlTestConfig.url,
+      interval: urlTestConfig.interval,
+      tolerance: urlTestConfig.tolerance,
+      lazy: urlTestConfig.lazy,
+      filter: r.filter,
+    });
+  });
+
+  // 6. 全局自动选择
+  proxyGroups.push({
+    name: "♻️ 自动选择",
+    type: "url-test",
+    "include-all": true,
+    url: urlTestConfig.url,
+    interval: urlTestConfig.interval,
+    tolerance: urlTestConfig.tolerance,
+    lazy: urlTestConfig.lazy,
+    filter: regionFilters.ALL,
+  });
+
+  // 7. 全部节点
+  proxyGroups.push({
+    name: "🌐 全部节点",
+    type: "select",
+    "include-all": true,
+  });
+
+  config["proxy-groups"] = proxyGroups;
+
+  // ==================== 规则配置 ====================
+  config["rules"] = [
+    "RULE-SET,private_ip,直连,no-resolve",
+    "RULE-SET,private_domain,直连",
+    "RULE-SET,custom_domain,直连",
+    "DOMAIN-SUFFIX,qichiyu.com,🚀 默认代理",
+    "RULE-SET,proxylite,🚀 默认代理",
+    "RULE-SET,ai,🤖 ChatGPT",
+    "RULE-SET,github_domain,👨🏿‍💻 GitHub",
+    "RULE-SET,youtube_domain,📹 YouTube",
+    "RULE-SET,google_domain,🍀 Google",
+    "RULE-SET,onedrive_domain,🐬 OneDrive",
+    "RULE-SET,microsoft_domain,🪟 Microsoft",
+    "RULE-SET,apple_domain,直连",
+    "RULE-SET,tiktok_domain,🎵 TikTok",
+    "RULE-SET,telegram_domain,📲 Telegram",
+    "RULE-SET,netflix_domain,🎥 NETFLIX",
+    "RULE-SET,paypal_domain,💶 PayPal",
+    "RULE-SET,apple_ip,直连",
+    "RULE-SET,google_ip,🍀 Google",
+    "RULE-SET,netflix_ip,🎥 NETFLIX",
+    "RULE-SET,telegram_ip,📲 Telegram",
+    "RULE-SET,geolocation-!cn,🚀 默认代理",
+    "RULE-SET,cn_domain,直连",
+    "RULE-SET,cn_ip,直连",
+    "MATCH,🐟 漏网之鱼",
+  ];
+
+  // ==================== 规则集配置 ====================
+  const domainProvider = { type: "http", interval: 86400, behavior: "domain", format: "mrs" };
+  const ipProvider = { type: "http", interval: 86400, behavior: "ipcidr", format: "mrs" };
+  const classProvider = { type: "http", interval: 86400, behavior: "classical", format: "text" };
+
+  config["rule-providers"] = {
+    fakeipfilter_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/fakeip-filter.mrs" },
+    private_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs" },
+    custom_domain: { ...classProvider, url: "https://raw.githubusercontent.com/wang-haoshuai/rule/refs/heads/master/rule/Direct/Direct.list" },
+    proxylite: { ...classProvider, url: "https://raw.githubusercontent.com/qichiyuhub/rule/refs/heads/main/proxy.list" },
+    ai: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs" },
+    youtube_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs" },
+    google_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs" },
+    github_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs" },
+    telegram_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs" },
+    netflix_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs" },
+    paypal_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs" },
+    onedrive_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/onedrive.mrs" },
+    microsoft_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.mrs" },
+    apple_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs" },
+    tiktok_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs" },
+    "geolocation-!cn": { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs" },
+    cn_domain: { ...domainProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs" },
+    private_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs" },
+    cn_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs" },
+    google_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs" },
+    telegram_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs" },
+    netflix_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs" },
+    apple_ip: { ...ipProvider, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo-lite/geoip/apple.mrs" },
+  };
+
+  return config;
 }
