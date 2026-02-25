@@ -1,5 +1,4 @@
 // Clash Verge Rev / Clash Party 覆写脚本
-// 修复版本：保留原配置的 proxies，正确处理"直连"节点
 
 /**
  * 主入口函数
@@ -11,16 +10,16 @@ function main(config) {
   const settings = {
     // TUN 模式开关：true = TUN 全接管，false = 仅系统代理
     tunMode: false,
-    
+
     // DNS 防泄露开关：true = 启用防泄露 DNS 策略
     dnsAntiLeak: true,
-    
+
     // 局域网共享开关
     allowLan: true,
-    
+
     // 嗅探开关（fakeip 下可关闭以提升性能）
     snifferEnable: true,
-    
+
     // 日志级别：silent / error / warning / info / debug
     logLevel: "warning",
   };
@@ -30,7 +29,7 @@ function main(config) {
   if (!config.proxies) {
     config.proxies = [];
   }
-  
+
   // 检查是否已有"直连"节点，没有则添加
   const hasDirectProxy = config.proxies.some(p => p.name === "直连");
   if (!hasDirectProxy) {
@@ -56,9 +55,13 @@ function main(config) {
     "store-fake-ip": true,
   };
 
+  // ==================== GEO 自动更新 ====================
+  config["geo-auto-update"] = true;
+  config["geo-update-interval"] = 24;
+
   // ==================== TUN 配置 ====================
   config["tun"] = {
-    enable: true,
+    enable: settings.tunMode,
     stack: "mixed",
     "dns-hijack": ["any:53", "tcp://any:53"],
     "auto-route": settings.tunMode,
@@ -104,7 +107,22 @@ function main(config) {
     "enhanced-mode": "fake-ip",
     "fake-ip-range": "28.0.0.1/8",
     "fake-ip-filter-mode": "blacklist",
-    "fake-ip-filter": ["rule-set:fakeipfilter_domain"],
+    "fake-ip-filter": [
+      "rule-set:fakeipfilter_domain",
+      "+.login.microsoftonline.com",
+      "+.login.live.com",
+      "+.login.microsoft.com",
+      "+.microsoftazuread-sso.com",
+      "+.msftauth.net",
+      "+.msauth.net",
+      "+.msauthimages.net",
+      "+.gemini.google.com",
+      "+.aistudio.google.com",
+      "+.generativelanguage.googleapis.com",
+      "+.alkalimakersuite-pa.clients6.google.com",
+      "+.notebooklm.google",
+      "+.notebooklm.google.com",
+    ],
     "default-nameserver": ["223.5.5.5", "119.29.29.29"],
     "proxy-server-nameserver": domesticDns,
     nameserver: domesticDns,
@@ -121,6 +139,17 @@ function main(config) {
       "rule-set:netflix_domain": proxyDns,
       "rule-set:tiktok_domain": proxyDns,
       "rule-set:ai": proxyDns,
+      "+.gemini.google.com": proxyDns,
+      "+.aistudio.google.com": proxyDns,
+      "+.generativelanguage.googleapis.com": proxyDns,
+      "+.alkalimakersuite-pa.clients6.google.com": proxyDns,
+      "+.notebooklm.google": proxyDns,
+      "+.notebooklm.google.com": proxyDns,
+      "+.login.microsoftonline.com": domesticDns,
+      "+.login.live.com": domesticDns,
+      "+.login.microsoft.com": domesticDns,
+      "+.msftauth.net": domesticDns,
+      "+.msauth.net": domesticDns,
       "rule-set:onedrive_domain": proxyDns,
       "rule-set:microsoft_domain": proxyDns,
       "rule-set:paypal_domain": proxyDns,
@@ -134,10 +163,11 @@ function main(config) {
   // 地区筛选正则
   const regionFilters = {
     HK: "(?=.*(港|HK|(?i)Hong))^((?!(台|日|韩|新|深|美)).)*$",
+    TW: "(?=.*(台|TW|(?i)Taiwan))^((?!(港|日|韩|新|深|美)).)*$",
     JP: "(?=.*(日|JP|(?i)Japan))^((?!(港|台|韩|新|美)).)*$",
     SG: "(?=.*(新加坡|坡|狮城|SG|Singapore))^((?!(台|日|韩|深|美)).)*$",
     US: "(?=.*(美|US|(?i)States|America))^((?!(港|台|韩|新|日)).)*$",
-    ALL: "^((?!(直连)).)*$",
+    ALL: "^((?!(直连|剩余|到期|流量|官网)).)*$",
   };
 
   // 通用测速配置
@@ -151,6 +181,7 @@ function main(config) {
   // 地区配置
   const regions = [
     { name: "香港", emoji: "🇭🇰", filter: regionFilters.HK },
+    { name: "台湾", emoji: "🇹🇼", filter: regionFilters.TW },
     { name: "日本", emoji: "🇯🇵", filter: regionFilters.JP },
     { name: "狮城", emoji: "🇸🇬", filter: regionFilters.SG },
     { name: "美国", emoji: "🇺🇲", filter: regionFilters.US },
@@ -169,29 +200,79 @@ function main(config) {
   });
 
   // 2. 业务策略组
-  const sceneProxies = [
-    "🇭🇰 香港场景",
-    "🇯🇵 日本场景",
-    "🇸🇬 狮城场景",
-    "🇺🇲 美国场景",
-    "♻️ 自动选择",
-    "🌐 全部节点",
-    "直连",
-  ];
-
   proxyGroups.push(
-    { name: "🚀 默认代理", type: "select", proxies: [...sceneProxies] },
-    { name: "📹 YouTube", type: "select", proxies: ["🇺🇲 美国场景", "🇭🇰 香港场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "🍀 Google", type: "select", proxies: [...sceneProxies] },
-    { name: "🤖 ChatGPT", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "👨🏿‍💻 GitHub", type: "select", proxies: [...sceneProxies] },
-    { name: "🐬 OneDrive", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "🪟 Microsoft", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "🎵 TikTok", type: "select", proxies: ["🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "📲 Telegram", type: "select", proxies: [...sceneProxies] },
-    { name: "🎥 NETFLIX", type: "select", proxies: ["🇸🇬 狮城场景", "🇯🇵 日本场景", "🇺🇲 美国场景", "🇭🇰 香港场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "💶 PayPal", type: "select", proxies: ["🇯🇵 日本场景", "🇭🇰 香港场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "♻️ 自动选择", "🌐 全部节点", "直连"] },
-    { name: "🐟 漏网之鱼", type: "select", proxies: ["🚀 默认代理", "🇭🇰 香港场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "♻️ 自动选择", "🌐 全部节点", "直连"] }
+    // 🚀 默认代理 — 默认：自动选择
+    {
+      name: "🚀 默认代理", type: "select", proxies: [
+        "♻️ 自动选择", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 📹 YouTube — 默认：香港
+    {
+      name: "📹 YouTube", type: "select", proxies: [
+        "🇭🇰 香港场景", "🚀 默认代理", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 🍀 Google — 默认：香港
+    {
+      name: "🍀 Google", type: "select", proxies: [
+        "🇭🇰 香港场景", "🚀 默认代理", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 🤖 ChatGPT — 默认：美国
+    {
+      name: "🤖 ChatGPT", type: "select", proxies: [
+        "🇺🇲 美国场景", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 👨‍💻 GitHub — 默认：香港
+    {
+      name: "👨‍💻 GitHub", type: "select", proxies: [
+        "🇭🇰 香港场景", "🚀 默认代理", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 🐬 OneDrive — 默认：直连
+    {
+      name: "🐬 OneDrive", type: "select", proxies: [
+        "直连", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点"
+      ]
+    },
+    // 🪟 Microsoft — 默认：直连
+    {
+      name: "🪟 Microsoft", type: "select", proxies: [
+        "直连", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点"
+      ]
+    },
+    // 🎵 TikTok — 默认：台湾
+    {
+      name: "🎵 TikTok", type: "select", proxies: [
+        "🇹🇼 台湾场景", "🚀 默认代理", "🇭🇰 香港场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 📲 Telegram — 默认：狮城
+    {
+      name: "📲 Telegram", type: "select", proxies: [
+        "🇸🇬 狮城场景", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 🎥 NETFLIX — 默认：狮城
+    {
+      name: "🎥 NETFLIX", type: "select", proxies: [
+        "🇸🇬 狮城场景", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇺🇲 美国场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 💶 PayPal — 默认：美国
+    {
+      name: "💶 PayPal", type: "select", proxies: [
+        "🇺🇲 美国场景", "🚀 默认代理", "🇭🇰 香港场景", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🌐 全部节点", "直连"
+      ]
+    },
+    // 🐟 漏网之鱼 — 默认：香港
+    {
+      name: "🐟 漏网之鱼", type: "select", proxies: [
+        "🇭🇰 香港场景", "🚀 默认代理", "🇹🇼 台湾场景", "🇯🇵 日本场景", "🇸🇬 狮城场景", "🇺🇲 美国场景", "♻️ 自动选择", "🌐 全部节点", "直连"
+      ]
+    }
   );
 
   // 3. 地区手动选择节点组
@@ -259,10 +340,24 @@ function main(config) {
     "RULE-SET,custom_domain,直连",
     "DOMAIN-SUFFIX,qichiyu.com,🚀 默认代理",
     "RULE-SET,proxylite,🚀 默认代理",
+    "DOMAIN-SUFFIX,gemini.google.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,aistudio.google.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,generativelanguage.googleapis.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,notebooklm.google,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,notebooklm.google.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,deepmind.com,🤖 ChatGPT",
+    "DOMAIN-SUFFIX,deepmind.google,🤖 ChatGPT",
     "RULE-SET,ai,🤖 ChatGPT",
-    "RULE-SET,github_domain,👨🏿‍💻 GitHub",
+    "RULE-SET,github_domain,👨‍💻 GitHub",
     "RULE-SET,youtube_domain,📹 YouTube",
     "RULE-SET,google_domain,🍀 Google",
+    "DOMAIN-SUFFIX,login.microsoftonline.com,直连",
+    "DOMAIN-SUFFIX,login.live.com,直连",
+    "DOMAIN-SUFFIX,login.microsoft.com,直连",
+    "DOMAIN-SUFFIX,microsoftazuread-sso.com,直连",
+    "DOMAIN-SUFFIX,msftauth.net,直连",
+    "DOMAIN-SUFFIX,msauth.net,直连",
     "RULE-SET,onedrive_domain,🐬 OneDrive",
     "RULE-SET,microsoft_domain,🪟 Microsoft",
     "RULE-SET,apple_domain,直连",
